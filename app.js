@@ -187,7 +187,7 @@ function getAccountForMagasin(magasin) {
     const name = magasin.toUpperCase().trim();
     if (name.includes("CENTRE")) return 70700852;
     if (name.includes("LEU")) return 70700854;
-    if (name.includes("SC")) return 70700850;
+    if (name.includes("SACRE")) return 70700850;
     if (name.includes("PAUL")) return 70700851;
     if (name.includes("PORTAIL")) return 707000854
     return 70700851; // Fallback to ST PAUL by default
