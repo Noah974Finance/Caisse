@@ -189,7 +189,7 @@ function getAccountForMagasin(magasin) {
     if (name.includes("LEU")) return 70700854;
     if (name.includes("SACRE")) return 70700850;
     if (name.includes("PAUL")) return 70700851;
-    if (name.includes("PORTAIL")) return 707000854
+    if (name.includes("PORTAIL")) return 70700854;
     return 70700851; // Fallback to ST PAUL by default
 }
 
