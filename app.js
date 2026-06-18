@@ -156,7 +156,7 @@ function parsePdf(file) {
                 const carte = extractValueForLabel(lines, ['carte', 'cartes', 'cb'], ['cadeau', 'fidelite', 'fidélité']);
                 const cheque = extractValueForLabel(lines, ['cheque', 'chèque'], ['cadeau', 'fidelite', 'fidélité']);
                 const chequeCadeau = extractValueForLabel(lines, ['cadeau'], ['fidelite', 'fidélité']);
-                const avoir = extractValueForLabel(lines, ['avoir', 'avoirs', "bon d'avoir", 'bon d’avoir']);
+                const avoir = extractValueForLabel(lines, ['bon d\'avoir', 'bon d’avoir', 'bons d\'avoir', 'bons d’avoir', 'avoir'], ['total']);
                 const ajuste = extractValueForLabel(lines, ['ajuste', 'ajustement']);
 
                 resolve({
