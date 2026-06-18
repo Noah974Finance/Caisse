@@ -149,12 +149,13 @@ function parsePdf(file) {
                 // Extract fields
                 const dateFin = extractEndDate(lines);
                 const magasin = extractStoreName(lines);
-                const ttc = extractValueForLabel(lines, ['total en ttc']);
+                const ttc = extractValueForLabel(lines, ['Total en TTC']);
                 const ht = Math.round((ttc / 1.085) * 100) / 100;
                 const tva = Math.round((ht * 0.085) * 100) / 100;
                 const especes = extractValueForLabel(lines, ['especes', 'espèces']);
                 const carte = extractValueForLabel(lines, ['carte', 'cartes', 'cb'], ['cadeau', 'fidelite', 'fidélité']);
-                const cheque = extractChequesTotal(lines);
+                const cheque = extractValueForLabel(lines, ['cheque', 'chèque'], ['cadeau', 'fidelite', 'fidélité']);
+                const chequeCadeau = extractValueForLabel(lines, ['cadeau'], ['fidelite', 'fidélité']);
                 const avoir = extractValueForLabel(lines, ['avoir', 'avoirs', "bon d'avoir", 'bon d’avoir']);
                 const ajuste = extractValueForLabel(lines, ['ajuste', 'ajustement']);
 
@@ -168,6 +169,7 @@ function parsePdf(file) {
                     especes,
                     carte,
                     cheque,
+                    chequeCadeau,
                     avoir,
                     ajuste
                 });
@@ -189,45 +191,6 @@ function getAccountForMagasin(magasin) {
     if (name.includes("PAUL")) return 70700851;
     if (name.includes("PORTAIL")) return 707000854
     return 70700851; // Fallback to ST PAUL by default
-}
-
-// Sum all standard cheques and gift cards (chèques cadeaux) while excluding fidelity cheques
-function extractChequesTotal(lines) {
-    let total = 0;
-    for (const line of lines) {
-        const lower = line.toLowerCase();
-        
-        // Match standard cheques or check gift cards (chèque cadeau / cheque cadeau)
-        const isCheque = lower.includes('cheque') || lower.includes('chèque');
-        // Exclude fidelity checks
-        const isFidelity = lower.includes('fidelite') || lower.includes('fidélité');
-        
-        if (isCheque && !isFidelity) {
-            const parts = line.split(':');
-            if (parts.length > 1) {
-                const numStr = parts[1].trim();
-                const cleaned = numStr.replace(/\s/g, '').replace(/[^0-9,.-]/g, '');
-                if (cleaned) {
-                    let val = 0;
-                    if (cleaned.includes(',') && !cleaned.includes('.')) {
-                        val = parseFloat(cleaned.replace(',', '.'));
-                    } else if (cleaned.includes('.') && cleaned.includes(',')) {
-                        if (cleaned.indexOf('.') > cleaned.indexOf(',')) {
-                            val = parseFloat(cleaned.replace(/,/g, ''));
-                        } else {
-                            val = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-                        }
-                    } else {
-                        val = parseFloat(cleaned);
-                    }
-                    if (!isNaN(val)) {
-                        total += Math.abs(val);
-                    }
-                }
-            }
-        }
-    }
-    return total;
 }
 
 // Unified Label Extractor
@@ -351,6 +314,13 @@ function renderTable() {
                 label: 'REMISE CHEQUES'
             },
             {
+                type: 'cheques_cadeaux',
+                account: '5814',
+                debit: item.chequeCadeau.toFixed(2),
+                credit: '0.00',
+                label: 'REMISE CHEQUES CADEAUX'
+            },
+            {
                 type: 'cb',
                 account: '581001',
                 debit: item.carte.toFixed(2),
@@ -461,6 +431,16 @@ function exportToExcel() {
             item.cheque,
             0,
             "REMISE CHEQUES"
+        ]);
+
+        // 4b. Cheques Cadeaux row (Debit)
+        data.push([
+            item.dateFin,
+            "CA",
+            5814,
+            item.chequeCadeau,
+            0,
+            "REMISE CHEQUES CADEAUX"
         ]);
 
         // 5. Carte/CB row (Debit)
