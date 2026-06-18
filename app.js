@@ -154,7 +154,7 @@ function parsePdf(file) {
                 const tva = Math.round((ttc - ht) * 100) / 100;
                 const especes = extractValueForLabel(lines, ['especes', 'espèces']);
                 const carte = extractValueForLabel(lines, ['carte', 'cartes', 'cb'], ['cadeau', 'fidelite', 'fidélité']);
-                const cheque = extractValueForLabel(lines, ['cheque', 'chèque', 'remise chèque', 'remise cheque'], ['cadeau', 'fidelite', 'fidélité']);
+                const cheque = extractChequesTotal(lines);
                 const avoir = extractValueForLabel(lines, ['avoir', 'avoirs', "bon d'avoir", 'bon d’avoir']);
                 const ajuste = extractValueForLabel(lines, ['ajuste', 'ajustement']);
 
@@ -183,11 +183,51 @@ function parsePdf(file) {
 // Map magasin location name to account code
 function getAccountForMagasin(magasin) {
     const name = magasin.toUpperCase().trim();
-    if (name.includes("PORT")) return 70700852;
+    if (name.includes("CENTRE")) return 70700852;
     if (name.includes("LEU")) return 70700854;
     if (name.includes("SC")) return 70700850;
     if (name.includes("PAUL")) return 70700851;
+    if (name.includes("PORTAIL")) return 707000854
     return 70700851; // Fallback to ST PAUL by default
+}
+
+// Sum all standard cheques and gift cards (chèques cadeaux) while excluding fidelity cheques
+function extractChequesTotal(lines) {
+    let total = 0;
+    for (const line of lines) {
+        const lower = line.toLowerCase();
+        
+        // Match standard cheques or check gift cards (chèque cadeau / cheque cadeau)
+        const isCheque = lower.includes('cheque') || lower.includes('chèque');
+        // Exclude fidelity checks
+        const isFidelity = lower.includes('fidelite') || lower.includes('fidélité');
+        
+        if (isCheque && !isFidelity) {
+            const parts = line.split(':');
+            if (parts.length > 1) {
+                const numStr = parts[1].trim();
+                const cleaned = numStr.replace(/\s/g, '').replace(/[^0-9,.-]/g, '');
+                if (cleaned) {
+                    let val = 0;
+                    if (cleaned.includes(',') && !cleaned.includes('.')) {
+                        val = parseFloat(cleaned.replace(',', '.'));
+                    } else if (cleaned.includes('.') && cleaned.includes(',')) {
+                        if (cleaned.indexOf('.') > cleaned.indexOf(',')) {
+                            val = parseFloat(cleaned.replace(/,/g, ''));
+                        } else {
+                            val = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+                        }
+                    } else {
+                        val = parseFloat(cleaned);
+                    }
+                    if (!isNaN(val)) {
+                        total += Math.abs(val);
+                    }
+                }
+            }
+        }
+    }
+    return total;
 }
 
 // Unified Label Extractor
