@@ -83,7 +83,7 @@ function handleFileSelect(e) {
 // Main processor for multiple files
 async function processFiles(files) {
     const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf' || file.name.endsWith('.pdf'));
-    
+
     if (pdfFiles.length === 0) {
         alert("Veuillez sélectionner ou glisser des fichiers PDF.");
         return;
@@ -108,12 +108,12 @@ async function processFiles(files) {
 function parsePdf(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = async function(e) {
+        reader.onload = async function (e) {
             try {
                 const arrayBuffer = e.target.result;
                 const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                 const pdf = await loadingTask.promise;
-                
+
                 // Read the first page (or page 1)
                 const page = await pdf.getPage(1);
                 const textContent = await page.getTextContent();
@@ -196,10 +196,10 @@ function extractValueForLabel(lines, keywords, excludeKeywords = []) {
         const lower = line.toLowerCase();
         const matchesKeyword = keywords.some(kw => lower.includes(kw.toLowerCase()));
         if (!matchesKeyword) continue;
-        
+
         const matchesExclude = excludeKeywords.some(ex => lower.includes(ex.toLowerCase()));
         if (matchesExclude) continue;
-        
+
         const parts = line.split(':');
         if (parts.length > 1) {
             const numStr = parts[1].trim();
@@ -229,16 +229,16 @@ function extractStoreName(lines) {
     for (const line of lines) {
         const trimmed = line.trim();
         const lower = trimmed.toLowerCase();
-        
-        if (trimmed && 
-            !trimmed.match(/^\d/) && 
-            !lower.includes('du ') && 
-            !lower.includes('au ') && 
-            !lower.includes('édité') && 
-            !lower.includes('edite') && 
+
+        if (trimmed &&
+            !trimmed.match(/^\d/) &&
+            !lower.includes('du ') &&
+            !lower.includes('au ') &&
+            !lower.includes('édité') &&
+            !lower.includes('edite') &&
             !trimmed.startsWith('-') &&
             trimmed.length > 2) {
-            
+
             return trimmed.replace(/^[^a-zA-Z0-9À-ÿ]+/, '').trim();
         }
     }
@@ -356,7 +356,7 @@ function renderTable() {
             const found = extractedData.find(item => item.id === id);
             if (found) {
                 found.magasin = val;
-                
+
                 // Dynamically update corresponding UI elements in other cells without redrawing/losing focus
                 const accountVal = getAccountForMagasin(val);
                 const accountSpan = document.querySelector(`.account-code-${id}`);
@@ -464,7 +464,7 @@ function exportToExcel() {
         if (cellD) {
             cellD.z = '0.00';
         }
-        
+
         const cellRefE = XLSX.utils.encode_cell({ r: r, c: 4 });
         const cellE = worksheet[cellRefE];
         if (cellE) {
