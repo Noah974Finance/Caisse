@@ -146,19 +146,30 @@ function parsePdf(file) {
                 });
 
                 console.log("Extracted lines for file:", file.name, lines);
-
                 // Extract fields
                 const dateFin = extractEndDate(lines);
                 const magasin = extractStoreName(lines);
-                const ttc = extractTotalTTC(lines);
-                const tva = Math.round(ttc * 0.085 * 100) / 100;
+                const ttc = extractValueForLabel(lines, ['total en ttc']);
+                const ht = Math.round((ttc / 1.085) * 100) / 100;
+                const tva = Math.round((ttc - ht) * 100) / 100;
+                const especes = extractValueForLabel(lines, ['especes', 'espèces']);
+                const carte = extractValueForLabel(lines, ['carte', 'cartes', 'cb'], ['cadeau', 'fidelite', 'fidélité']);
+                const cheque = extractValueForLabel(lines, ['cheque', 'chèque', 'remise chèque', 'remise cheque'], ['cadeau', 'fidelite', 'fidélité']);
+                const avoir = extractValueForLabel(lines, ['avoir', 'avoirs', "bon d'avoir", 'bon d’avoir']);
+                const ajuste = extractValueForLabel(lines, ['ajuste', 'ajustement']);
 
                 resolve({
                     fileName: file.name,
                     dateFin,
                     magasin,
                     ttc,
-                    tva
+                    ht,
+                    tva,
+                    especes,
+                    carte,
+                    cheque,
+                    avoir,
+                    ajuste
                 });
             } catch (err) {
                 reject(err);
@@ -169,10 +180,52 @@ function parsePdf(file) {
     });
 }
 
+// Map magasin location name to account code
+function getAccountForMagasin(magasin) {
+    const name = magasin.toUpperCase().trim();
+    if (name.includes("PORT")) return 70700852;
+    if (name.includes("LEU")) return 70700854;
+    if (name.includes("SC")) return 70700850;
+    if (name.includes("PAUL")) return 70700851;
+    return 70700851; // Fallback to ST PAUL by default
+}
+
+// Unified Label Extractor
+function extractValueForLabel(lines, keywords, excludeKeywords = []) {
+    for (const line of lines) {
+        const lower = line.toLowerCase();
+        const matchesKeyword = keywords.some(kw => lower.includes(kw.toLowerCase()));
+        if (!matchesKeyword) continue;
+        
+        const matchesExclude = excludeKeywords.some(ex => lower.includes(ex.toLowerCase()));
+        if (matchesExclude) continue;
+        
+        const parts = line.split(':');
+        if (parts.length > 1) {
+            const numStr = parts[1].trim();
+            const cleaned = numStr.replace(/\s/g, '').replace(/[^0-9,.-]/g, '');
+            if (cleaned) {
+                let val = 0;
+                if (cleaned.includes(',') && !cleaned.includes('.')) {
+                    val = parseFloat(cleaned.replace(',', '.'));
+                } else if (cleaned.includes('.') && cleaned.includes(',')) {
+                    if (cleaned.indexOf('.') > cleaned.indexOf(',')) {
+                        val = parseFloat(cleaned.replace(/,/g, ''));
+                    } else {
+                        val = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+                    }
+                } else {
+                    val = parseFloat(cleaned);
+                }
+                if (!isNaN(val)) return Math.abs(val); // Always return absolute/positive value
+            }
+        }
+    }
+    return 0.00;
+}
+
 // Field extractors
 function extractStoreName(lines) {
-    // Universal extraction: get the first clean text line of the document
-    // excluding date-related or metadata keywords.
     for (const line of lines) {
         const trimmed = line.trim();
         const lower = trimmed.toLowerCase();
@@ -186,11 +239,10 @@ function extractStoreName(lines) {
             !trimmed.startsWith('-') &&
             trimmed.length > 2) {
             
-            // Remove any leading punctuation/spaces and return
             return trimmed.replace(/^[^a-zA-Z0-9À-ÿ]+/, '').trim();
         }
     }
-    return "MAGASIN"; // Default fallback
+    return "MAGASIN";
 }
 
 function extractEndDate(lines) {
@@ -200,48 +252,16 @@ function extractEndDate(lines) {
             return match[1];
         }
     }
-    // Fallback search for any date
     for (const line of lines) {
         const matches = line.match(/(\d{2}\/\d{2}\/\d{4})/g);
         if (matches) {
-            return matches[matches.length - 1]; // Use last date found
+            return matches[matches.length - 1];
         }
     }
     return new Date().toLocaleDateString('fr-FR');
 }
 
-function extractTotalTTC(lines) {
-    for (const line of lines) {
-        if (line.toLowerCase().includes('total en ttc')) {
-            const parts = line.split(':');
-            if (parts.length > 1) {
-                const numStr = parts[1].trim();
-                const cleaned = numStr
-                    .replace(/\s/g, '') // Remove spaces
-                    .replace(/[^0-9,.-]/g, ''); // Filter numbers and symbols
-                
-                if (cleaned) {
-                    let val = 0;
-                    if (cleaned.includes(',') && !cleaned.includes('.')) {
-                        val = parseFloat(cleaned.replace(',', '.'));
-                    } else if (cleaned.includes('.') && cleaned.includes(',')) {
-                        if (cleaned.indexOf('.') > cleaned.indexOf(',')) {
-                            val = parseFloat(cleaned.replace(/,/g, ''));
-                        } else {
-                            val = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-                        }
-                    } else {
-                        val = parseFloat(cleaned);
-                    }
-                    if (!isNaN(val)) return val;
-                }
-            }
-        }
-    }
-    return 0.00; // Returns 0 if redacted or not found
-}
-
-// Rendering function
+// Rendering function (generates the 7 rows per PDF in the table preview)
 function renderTable() {
     if (extractedData.length === 0) {
         resultsCard.style.display = 'none';
@@ -253,39 +273,82 @@ function renderTable() {
     resultsCard.style.display = 'block';
 
     extractedData.forEach(item => {
-        // Row 1: Sales (Ventes)
-        const rowVentes = document.createElement('tr');
-        rowVentes.innerHTML = `
-            <td>${item.dateFin}</td>
-            <td>CA</td>
-            <td>70700852</td>
-            <td>0</td>
-            <td class="amount-val ttc">${item.ttc.toFixed(2)}</td>
-            <td>
-                <div class="edit-cell-container">
-                    <span class="prefix-label">VENTES MSES 8,50% </span>
-                    <input type="text" class="magasin-input" value="${item.magasin}" data-id="${item.id}">
-                </div>
-            </td>
-            <td><span class="source-badge" title="${item.fileName}">${item.fileName}</span></td>
-        `;
-        tableBody.appendChild(rowVentes);
+        const accountSales = getAccountForMagasin(item.magasin);
 
-        // Row 2: VAT (TVA)
-        const rowTva = document.createElement('tr');
-        rowTva.innerHTML = `
-            <td>${item.dateFin}</td>
-            <td>CA</td>
-            <td>44571000</td>
-            <td>0</td>
-            <td class="amount-val tva">${item.tva.toFixed(2)}</td>
-            <td>TVA COLLECTEE</td>
-            <td><span class="source-badge" title="${item.fileName}">${item.fileName}</span></td>
-        `;
-        tableBody.appendChild(rowTva);
+        // Define the 7 rows to insert
+        const rowsData = [
+            {
+                type: 'vente',
+                account: `<span class="account-code-${item.id}">${accountSales}</span>`,
+                debit: '0.00',
+                credit: `<span class="val-ht-${item.id}">${item.ht.toFixed(2)}</span>`,
+                label: `
+                    <div class="edit-cell-container">
+                        <span class="prefix-label">VENTE MSES 8,5% </span>
+                        <input type="text" class="magasin-input" value="${item.magasin}" data-id="${item.id}">
+                    </div>
+                `
+            },
+            {
+                type: 'tva',
+                account: '44571',
+                debit: '0.00',
+                credit: item.tva.toFixed(2),
+                label: 'TVA Collectee'
+            },
+            {
+                type: 'especes',
+                account: '5812',
+                debit: item.especes.toFixed(2),
+                credit: '0.00',
+                label: 'VERST ESPECES'
+            },
+            {
+                type: 'cheques',
+                account: '5814',
+                debit: item.cheque.toFixed(2),
+                credit: '0.00',
+                label: 'REMISE CHEQUES'
+            },
+            {
+                type: 'cb',
+                account: '581001',
+                debit: item.carte.toFixed(2),
+                credit: '0.00',
+                label: 'REMISE CB'
+            },
+            {
+                type: 'avoir',
+                account: '471',
+                debit: item.avoir.toFixed(2),
+                credit: '0.00',
+                label: 'BON D AVOIR'
+            },
+            {
+                type: 'ajuste',
+                account: '471',
+                debit: '0.00',
+                credit: item.ajuste.toFixed(2),
+                label: 'REST AJUSTE'
+            }
+        ];
+
+        rowsData.forEach(rowData => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.dateFin}</td>
+                <td>CA</td>
+                <td>${rowData.account}</td>
+                <td class="amount-val debit">${rowData.debit}</td>
+                <td class="amount-val credit">${rowData.credit}</td>
+                <td>${rowData.label}</td>
+                <td><span class="source-badge" title="${item.fileName}">${item.fileName}</span></td>
+            `;
+            tableBody.appendChild(tr);
+        });
     });
 
-    // Add event listeners to the inputs to dynamically update state on change
+    // Add event listeners to the store input fields
     document.querySelectorAll('.magasin-input').forEach(input => {
         input.addEventListener('input', (e) => {
             const id = e.target.getAttribute('data-id');
@@ -293,6 +356,13 @@ function renderTable() {
             const found = extractedData.find(item => item.id === id);
             if (found) {
                 found.magasin = val;
+                
+                // Dynamically update corresponding UI elements in other cells without redrawing/losing focus
+                const accountVal = getAccountForMagasin(val);
+                const accountSpan = document.querySelector(`.account-code-${id}`);
+                if (accountSpan) {
+                    accountSpan.textContent = accountVal;
+                }
             }
         });
     });
@@ -308,49 +378,102 @@ function clearAll() {
 function exportToExcel() {
     if (extractedData.length === 0) return;
 
-    // Create custom worksheet data structure
     const data = [];
 
-    extractedData.forEach((item, index) => {
-        const rowIdx = (index * 2) + 1; // 1-based index in Excel rows
+    extractedData.forEach((item) => {
+        const accountSales = getAccountForMagasin(item.magasin);
 
-        // Sales row
+        // 1. Sales row (HT Credit)
         data.push([
             item.dateFin,
             "CA",
-            70700852,
+            accountSales,
             0,
-            item.ttc,
-            `VENTES MSES 8,50% ${item.magasin}`
+            item.ht,
+            `VENTE MSES 8,5% ${item.magasin}`
         ]);
 
-        // VAT row using Excel formula `=E{rowIdx}*0.085` and fallback value
+        // 2. VAT row (TVA Credit)
         data.push([
             item.dateFin,
             "CA",
-            44571000,
+            44571,
             0,
-            { f: `E${rowIdx}*0.085`, v: item.tva },
-            "TVA COLLECTEE"
+            item.tva,
+            "TVA Collectee"
+        ]);
+
+        // 3. Especes row (Debit)
+        data.push([
+            item.dateFin,
+            "CA",
+            5812,
+            item.especes,
+            0,
+            "VERST ESPECES"
+        ]);
+
+        // 4. Cheques row (Debit)
+        data.push([
+            item.dateFin,
+            "CA",
+            5814,
+            item.cheque,
+            0,
+            "REMISE CHEQUES"
+        ]);
+
+        // 5. Carte/CB row (Debit)
+        data.push([
+            item.dateFin,
+            "CA",
+            581001,
+            item.carte,
+            0,
+            "REMISE CB"
+        ]);
+
+        // 6. Avoir row (Debit)
+        data.push([
+            item.dateFin,
+            "CA",
+            471,
+            item.avoir,
+            0,
+            "BON D AVOIR"
+        ]);
+
+        // 7. Rest Ajuste row (Credit)
+        data.push([
+            item.dateFin,
+            "CA",
+            471,
+            0,
+            item.ajuste,
+            "REST AJUSTE"
         ]);
     });
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
 
-    // Set formatting for column E (amount) to decimal numbers
-    // Let's iterate over cells in column E (index 4)
+    // Format Debit (col D, index 3) and Credit (col E, index 4) cells as numbers with 2 decimals
     const range = XLSX.utils.decode_range(worksheet['!ref']);
     for (let r = range.s.r; r <= range.e.r; r++) {
-        const cellRef = XLSX.utils.encode_cell({ r: r, c: 4 });
-        const cell = worksheet[cellRef];
-        if (cell) {
-            cell.z = '0.00'; // Numeric format with 2 decimals
+        const cellRefD = XLSX.utils.encode_cell({ r: r, c: 3 });
+        const cellD = worksheet[cellRefD];
+        if (cellD) {
+            cellD.z = '0.00';
+        }
+        
+        const cellRefE = XLSX.utils.encode_cell({ r: r, c: 4 });
+        const cellE = worksheet[cellRefE];
+        if (cellE) {
+            cellE.z = '0.00';
         }
     }
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Écritures Comptables");
 
-    // Generate Excel file and trigger download
     XLSX.writeFile(workbook, `ecritures_caisse_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
