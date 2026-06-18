@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertisseur PDF Caisse en Excel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- SheetJS (xlsx) CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Password Lock Overlay -->
+    <div id="lockScreen" class="lock-screen">
+        <div class="lock-card card">
+            <span class="lock-icon">🔒</span>
+            <h2>Accès Sécurisé</h2>
+            <p>Veuillez entrer le code d'accès pour déverrouiller l'application.</p>
+            <form id="lockForm" class="lock-form">
+                <input type="password" id="accessCode" placeholder="Code d'accès" required autocomplete="current-password">
+                <button type="submit" class="btn btn-primary btn-block">Déverrouiller</button>
+            </form>
+            <p id="lockError" class="lock-error" style="display: none;">Code incorrect. Veuillez réessayer.</p>
+        </div>
+    </div>
+
+    <div class="background-decor">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+    </div>
+
+    <div class="app-container" id="appContent" style="display: none;">
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="logo-icon">📊</span>
+                <h1>CaisseParser</h1>
+            </div>
+            <p class="subtitle">Convertissez instantanément vos PDF de caisse en écritures comptables Excel</p>
+            <div class="badge-container">
+                <span class="gdpr-badge">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="badge-svg">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <polyline points="9 11 11 13 15 9"/>
+                    </svg>
+                    Conforme RGPD : Traitement 100% Local (Sans Serveur)
+                </span>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <!-- Drag & Drop Zone -->
+            <div class="drop-zone" id="dropZone">
+                <input type="file" id="fileInput" multiple accept=".pdf" class="file-input">
+                <div class="drop-zone-content">
+                    <div class="icon-wrapper">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="upload-icon">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <h3>Glissez-déposez vos fichiers PDF ici</h3>
+                    <p>ou cliquez pour parcourir vos dossiers</p>
+                    <span class="file-limits">Accepte plusieurs fichiers .pdf</span>
+                </div>
+            </div>
+
+            <!-- Active Processing / Results Card -->
+            <div class="results-card card" id="resultsCard" style="display: none;">
+                <div class="card-header">
+                    <h2>Données extraites (<span id="fileCount">0</span> fichiers)</h2>
+                    <div class="action-buttons">
+                        <button id="clearBtn" class="btn btn-secondary">
+                            Effacer tout
+                        </button>
+                        <button id="exportBtn" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Exporter vers Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview Table Container -->
+                <div class="table-container">
+                    <table class="preview-table" id="previewTable">
+                        <thead>
+                            <tr>
+                                <th>Date Fin</th>
+                                <th>Code</th>
+                                <th>Compte</th>
+                                <th>Section</th>
+                                <th>Montant</th>
+                                <th>Libellé</th>
+                                <th>Source</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Information / Guide Card -->
+            <div class="guide-card card">
+                <h3>💡 Comment ça marche ?</h3>
+                <div class="steps-grid">
+                    <div class="step-item">
+                        <div class="step-num">1</div>
+                        <p>Glissez un ou plusieurs PDF de caisse dans la zone ci-dessus.</p>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-num">2</div>
+                        <p>L'application extrait automatiquement le magasin, le montant <strong>Total TTC</strong> et calcule la <strong>TVA à 8.5%</strong>.</p>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-num">3</div>
+                        <p>Cliquez sur "Exporter vers Excel" pour récupérer vos lignes d'écritures prêtes pour la comptabilité.</p>
+                    </div>
+                </div>
+
+                <div class="gdpr-box">
+                    <h4>🔒 Politique de Confidentialité & RGPD</h4>
+                    <p>Cette application s'exécute entièrement côté client dans votre navigateur web.
+                    <strong>Aucune donnée n'est collectée, stockée ou envoyée vers un serveur externe.</strong>
+                    La conformité RGPD est garantie par l'absence totale de traitement ou de transmission de données hors de votre machine locale.</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <p>Traitement local 100% sécurisé — Aucun fichier n'est envoyé sur Internet.</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

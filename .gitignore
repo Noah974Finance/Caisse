@@ -1,0 +1,13 @@
+# PDF and test data
+*.pdf
+
+# Operating system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE and workspace
+.vscode/
+.idea/
+.gemini/
