@@ -151,7 +151,7 @@ function parsePdf(file) {
                 const magasin = extractStoreName(lines);
                 const ttc = extractValueForLabel(lines, ['total en ttc']);
                 const ht = Math.round((ttc / 1.085) * 100) / 100;
-                const tva = Math.round((ttc - ht) * 100) / 100;
+                const tva = Math.round((ht * 0.085) * 100) / 100;
                 const especes = extractValueForLabel(lines, ['especes', 'espèces']);
                 const carte = extractValueForLabel(lines, ['carte', 'cartes', 'cb'], ['cadeau', 'fidelite', 'fidélité']);
                 const cheque = extractChequesTotal(lines);
